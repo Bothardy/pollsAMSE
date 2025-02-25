@@ -1,0 +1,5 @@
+style.cssstreamlit>=1.25
+pandas>=2.0
+matplotlib>=3.7
+numpy>=1.26
+openpyxl

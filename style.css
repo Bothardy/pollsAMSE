@@ -1,0 +1,38 @@
+/* style.css */
+body {
+  background-color: #fafafa;
+}
+
+/* Let's style the Plotly charts a bit */
+.stPlotlyChart .plotly {
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: white;
+  padding: 5px;
+}
+
+/* Example styling for titles */
+h1, h2, h3, h4 {
+  font-family: Arial, sans-serif;
+  color: #333;
+}
+
+/* Card-like container for stats */
+.stat-card {
+  background-color: white;
+  padding: 20px;
+  margin: 5px;
+  border-radius: 5px;
+  text-align: center;
+  border: 1px solid #ccc;
+}
+
+.stat-card h4 {
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+.stat-card p {
+  font-size: 24px;
+  margin: 0;
+  color: #0078D7;
+}
