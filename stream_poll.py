@@ -9,10 +9,6 @@ import plotly.graph_objects as go
 # 1) Fonction pour extraire l'année du nom de fichier
 # --------------------------------------------
 def extract_election_year(filename: str) -> str:
-    """
-    Recherche une année au format (19xx ou 20xx) dans le nom de fichier.
-    Renvoie une chaîne vide si rien n'est trouvé.
-    """
     match = re.search(r'(19|20)\d{2}', filename)
     if match:
         return match.group(0)
@@ -22,13 +18,6 @@ def extract_election_year(filename: str) -> str:
 # 2) Fonction pour renommer et standardiser les colonnes
 # --------------------------------------------
 def rename_and_standardize(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Unifie certains noms de colonnes.
-    Ex. si la colonne s'appelle 'party' ou 'Party', on la renomme en 'Political_Party'.
-    Case-insensitive.
-    """
-
-    # Dictionnaire de correspondance (en minuscule) -> nom final
     rename_map = {
         "party": "Political_Party",
         "political_party": "Political_Party",
@@ -40,19 +29,15 @@ def rename_and_standardize(df: pd.DataFrame) -> pd.DataFrame:
         "poll_result_2019": "Prediction_Result",
     }
 
-    # On recherche la correspondance exacte en minuscules
-    columns_lower = {c.lower(): c for c in df.columns}  # "party" -> "Party"
+    columns_lower = {c.lower(): c for c in df.columns}
     actual_map = {}
     for lower_name, final_name in rename_map.items():
         if lower_name in columns_lower:
             original_col = columns_lower[lower_name]
-            # On prépare le mapping original_col -> final_name
             actual_map[original_col] = final_name
 
     df = df.rename(columns=actual_map)
 
-    # On s'assure d'avoir ces colonnes dans le DataFrame.
-    # S'il en manque, on les crée vides.
     if "Date" not in df.columns:
         df["Date"] = pd.NaT
     if "Political_Party" not in df.columns:
@@ -60,34 +45,20 @@ def rename_and_standardize(df: pd.DataFrame) -> pd.DataFrame:
     if "Prediction_Result" not in df.columns:
         df["Prediction_Result"] = np.nan
 
-    # Convertir la colonne "Date" en datetime
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-
     return df
 
 # --------------------------------------------
 # 3) Fonction de chargement
 # --------------------------------------------
 def load_data(uploaded_file, sheet_name=0):
-    """
-    Lit un fichier Excel, renomme et standardise les colonnes,
-    puis tente de créer/compléter 'Election_Year' depuis le nom du fichier.
-    """
-
-    # Lecture de la feuille
     df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
-    # Retrait des espaces dans les noms de colonnes
     df.rename(columns=lambda x: x.strip(), inplace=True)
 
-    # Renommage / standardisation
     df = rename_and_standardize(df)
-
-    # Suppression des colonnes dupliquées, garde la 1ère occurrence
     df = df.loc[:, ~df.columns.duplicated()]
 
-    # Ajout/complétion de la colonne "Election_Year"
     if "Election_Year" not in df.columns:
-        # On récupère le nom du fichier (ou 'file.xlsx' si inconnu)
         name_for_detection = getattr(uploaded_file, "name", "file.xlsx")
         year_detected = extract_election_year(name_for_detection)
         if year_detected:
@@ -104,13 +75,12 @@ def main():
     st.set_page_config(page_title="Polling Analysis", layout="wide")
     st.title("Interactive Election Polling Analysis")
 
-    # Sidebar - Charger un fichier
+    # CHARGEMENT FICHIER
     uploaded_file = st.sidebar.file_uploader("Upload an Excel file", type=["xlsx"])
     if not uploaded_file:
         st.info("Please upload an Excel file to proceed.")
         return
 
-    # Choix de la feuille (par nom ou index)
     sheet_choice = st.sidebar.text_input("Sheet name or index (optional)", value="")
     if sheet_choice.strip():
         try:
@@ -120,21 +90,54 @@ def main():
     else:
         sheet_to_use = 0
 
-    # Chargement des données
-    df = load_data(uploaded_file, sheet_name=sheet_to_use)
+    # NEW: Si on n'a pas encore de DataFrame dans la session, on le charge
+    if "df_master" not in st.session_state:
+        df_initial = load_data(uploaded_file, sheet_name=sheet_to_use)
+        st.session_state["df_master"] = df_initial.copy()
+    else:
+        # Si on a déjà un df_master mais qu'un nouvel upload a eu lieu, on recharge
+        # pour ne pas mélanger plusieurs fichiers différents
+        # (vous pouvez adapter la logique selon vos besoins)
+        if st.session_state.get("current_file_name") != getattr(uploaded_file, "name", ""):
+            df_initial = load_data(uploaded_file, sheet_name=sheet_to_use)
+            st.session_state["df_master"] = df_initial.copy()
+            st.session_state["current_file_name"] = uploaded_file.name
+        else:
+            df_initial = st.session_state["df_master"]
 
-    # Vérification des colonnes critiques
+    # NEW: Interface pour ajouter un nouveau parti
+    st.sidebar.subheader("Add a new Political Party")
+    new_party = st.sidebar.text_input("New party name")
+    add_button = st.sidebar.button("Add Party/Candidat  ")
+
+    if add_button and new_party.strip():
+        # 1) On récupère toutes les dates & années existantes
+        df_dates = df_initial[["Date", "Election_Year"]].drop_duplicates().copy()
+        # 2) On génère un Prediction_Result aléatoire pour chaque date
+        #    Ici, on choisit un random uniform 0–50, à adapter selon vos préférences
+        random_scores = np.random.uniform(0, 50, size=len(df_dates))
+        df_dates["Political_Party"] = new_party
+        df_dates["Prediction_Result"] = random_scores
+
+        # 3) On concatène à df_master
+        st.session_state["df_master"] = pd.concat(
+            [st.session_state["df_master"], df_dates], ignore_index=True
+        )
+
+        st.success(f"Party '{new_party}' added with random predictions!")
+        st.experimental_rerun()  # relance le script pour tout actualiser
+
+    # Une fois le df_master mis à jour (potentiellement), on le ré-assigne à "df" local
+    df = st.session_state["df_master"].copy()
+
+    # Vérification colonnes critiques
     required_cols = ["Date", "Election_Year", "Political_Party", "Prediction_Result"]
     missing_cols = [c for c in required_cols if c not in df.columns]
     if missing_cols:
         st.error(f"Missing required columns: {missing_cols}")
-        st.write("Columns found:", list(df.columns))
         return
 
-    st.subheader("Raw Data (after rename & standardization)")
-    st.dataframe(df.head(30), use_container_width=True)
-
-    # Filtre sur l'Election_Year
+    # FILTRES
     all_elections = df["Election_Year"].dropna().unique()
     selected_election = st.sidebar.selectbox("Choose Election", sorted(all_elections))
 
@@ -143,7 +146,6 @@ def main():
         st.warning("No data for this election year.")
         return
 
-    # Filtre sur les partis
     all_parties = sorted(df_elec["Political_Party"].dropna().unique())
     chosen_parties = st.sidebar.multiselect("Select Parties", all_parties, default=all_parties)
     df_elec = df_elec[df_elec["Political_Party"].isin(chosen_parties)]
@@ -151,7 +153,6 @@ def main():
         st.warning("No data after filtering these parties.")
         return
 
-    # Filtre date
     if df_elec["Date"].notna().any():
         min_date = df_elec["Date"].dropna().min()
         max_date = df_elec["Date"].dropna().max()
@@ -165,7 +166,6 @@ def main():
         st.warning("No data in the selected date range.")
         return
 
-    # Convertir la colonne Prediction_Result en numérique
     df_elec["Prediction_Result"] = pd.to_numeric(df_elec["Prediction_Result"], errors="coerce")
 
     st.subheader("Filtered Data")
@@ -226,6 +226,7 @@ def main():
     )
     fig_scatter.update_layout(hovermode="x unified")
     st.plotly_chart(fig_scatter, use_container_width=True)
+
 
 if __name__ == "__main__":
     main()
