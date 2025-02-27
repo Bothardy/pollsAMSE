@@ -190,7 +190,7 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         "Other": "images/messi.png",
         "ONP": "images/messi.png",
         "UAP": "images/UAP.png",
-        "TPP vote ALP": "images/messi.png",
+        "TPP vote ALP": "images/labor.png",
         "TPP vote L/NP": "images/national.jpg",
         "2PP vote ALP": "images/messi.png",
         "2PP vote L/NP": "images/national.jpg",
