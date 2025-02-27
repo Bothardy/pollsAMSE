@@ -156,7 +156,10 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
     Fusionne data statique (AUSTRALIA_RESULTS) + data user (Resultat_Final),
     filtre duplications, affiche top 3.
     """
+    # 1) Partie statique
     static_dict = AUSTRALIA_RESULTS.get(election_name, {})
+
+    # 2) Moyenne des scores dans le DataFrame
     data_elec = df[df["Election_Year"] == election_name].copy()
     if data_elec.empty:
         st.info(f"No data to display for {election_name}.")
@@ -165,6 +168,7 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
     grouped = data_elec.groupby("Political_Party")["Resultat_Final"].mean().dropna()
     dynamic_dict = grouped.to_dict()
 
+    # 3) Fusion : on part d'une copie du dico statique et on met à jour avec les dynamiques
     merged_dict = dict(static_dict)
     for p, val in dynamic_dict.items():
         if p in merged_dict:
@@ -172,15 +176,22 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         else:
             merged_dict[p] = val
 
+    # 4) Filtrage des doublons
     filtered = filter_duplicate_parties(merged_dict)
-    sorted_items = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
-    top3 = sorted_items[:2]
 
+    # 5) Tri et Top 3
+    sorted_items = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
+    top3 = sorted_items[:3]
+
+    # Condition supplémentaire : si top3 est vide et si le nom d'année contient "argentine"
     if not top3:
-        st.info(f"No final results after filtering for {election_name}.")
+        if "argentine" in election_name.lower():
+            st.info(f"No final results available for {election_name} (Argentine file).")
+        else:
+            st.info(f"No final results after filtering for {election_name}.")
         return
 
-    st.header(f"Top 3 – {election_name} (Merged)")
+    st.header(f"Top 3 — {election_name} (Merged: Static + User Data)")
     st.divider()
 
     PARTY_IMAGES = {
@@ -206,6 +217,7 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
             st.image(img, use_column_width=True)
             st.subheader(party_name)
             st.write(desc)
+
 
 # ------------------------------
 # 4) Main app
