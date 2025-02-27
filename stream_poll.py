@@ -174,7 +174,7 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
 
     filtered = filter_duplicate_parties(merged_dict)
     sorted_items = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
-    top3 = sorted_items[:3]
+    top3 = sorted_items[:2]
 
     if not top3:
         st.info(f"No final results after filtering for {election_name}.")
