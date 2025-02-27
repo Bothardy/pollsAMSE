@@ -6,13 +6,16 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 
+# ------------------------------
+# 1) Synonymes et remapping
+# ------------------------------
 SYNONYMS = {
     "Political parties / ALP": "Labor",
     "Political parties / Lib": "L/NP",
     "Political parties / Nat": "L/NP",
     "Political parties / Grn": "Green",
     "Political parties / Oth": "Other",
-    "Two-party-preferred / ALP": "TPP vote ALP",  # ou "TPP vote Labor" selon vos besoins
+    "Two-party-preferred / ALP": "TPP vote ALP",
     "Two-party-preferred / Lib/Nat": "TPP vote L/NP"
 }
 
@@ -20,7 +23,9 @@ def remap_parties(df: pd.DataFrame) -> pd.DataFrame:
     df["Political_Party"] = df["Political_Party"].apply(lambda x: SYNONYMS.get(str(x).strip(), x))
     return df
 
-# Dictionnaire statique
+# ------------------------------
+# 2) Dictionnaire statique
+# ------------------------------
 AUSTRALIA_RESULTS = {
     "2010": {"L/NP": 43.3, "Labor": 38.0, "Green": 11.8, "Other": 7.0,
              "TPP vote Labor": 50.1, "TPP vote L/NP": 49.9},
@@ -35,6 +40,9 @@ AUSTRALIA_RESULTS = {
              "TPP vote ALP": 52.1, "TPP vote L/NP": 47.9}
 }
 
+# ------------------------------
+# 3) Fonctions diverses
+# ------------------------------
 def extract_election_year(filename: str) -> str:
     match = re.search(r'(19|20)\d{2}', filename)
     return match.group(0) if match else ""
@@ -68,6 +76,7 @@ def rename_and_standardize(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def load_data(uploaded_file, sheet_name=0) -> pd.DataFrame:
+    """Charge le fichier Excel et prépare le DataFrame."""
     df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
     df.rename(columns=lambda x: x.strip(), inplace=True)
     df = rename_and_standardize(df).loc[:, lambda d: ~d.columns.duplicated()]
@@ -79,9 +88,9 @@ def load_data(uploaded_file, sheet_name=0) -> pd.DataFrame:
     return df
 
 def fill_resultat_final_from_dict(df: pd.DataFrame) -> pd.DataFrame:
+    """Remplit la colonne 'Resultat_Final' depuis AUSTRALIA_RESULTS."""
     if "Resultat_Final" not in df.columns:
         df["Resultat_Final"] = np.nan
-
     for idx, row in df.iterrows():
         if pd.isna(row["Resultat_Final"]):
             year = str(row["Election_Year"]).strip()
@@ -102,6 +111,7 @@ def fill_resultat_final_from_dict(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def is_similar_party(name_a: str, name_b: str) -> bool:
+    """Détermine si deux noms de partis sont proches (cf. duplication)."""
     a_low, b_low = name_a.lower(), name_b.lower()
     if a_low in b_low or b_low in a_low:
         return True
@@ -126,6 +136,7 @@ def is_similar_party(name_a: str, name_b: str) -> bool:
     return False
 
 def filter_duplicate_parties(top_dict: dict) -> dict:
+    """Filtre les doublons. Ne conserve que le score le plus élevé."""
     items = list(top_dict.items())
     result = []
     for party_name, val in items:
@@ -140,51 +151,36 @@ def filter_duplicate_parties(top_dict: dict) -> dict:
             result.append((party_name, val))
     return dict(result)
 
-# ------------------------------------------------------------------------
-# show_top3_from_merged : fusionne (AUSTRALIA_RESULTS + df) pour l'année
-# ------------------------------------------------------------------------
 def show_top3_from_merged(df: pd.DataFrame, election_name: str):
     """
-    1) Récupère le dict statique AUSTRALIA_RESULTS[election_name] s'il existe
-    2) Récupère la moyenne par parti (Resultat_Final) dans le df
-    3) Fusionne en privilégiant le score le plus élevé
-    4) Filtre doublons (similar_party)
-    5) Affiche top 3
+    Fusionne data statique (AUSTRALIA_RESULTS) + data user (Resultat_Final),
+    filtre duplications, affiche top 3.
     """
-    # 1) Partie statique
     static_dict = AUSTRALIA_RESULTS.get(election_name, {})
-
-    # 2) Moyenne des scores dans le DataFrame
     data_elec = df[df["Election_Year"] == election_name].copy()
     if data_elec.empty:
         st.info(f"No data to display for {election_name}.")
         return
 
     grouped = data_elec.groupby("Political_Party")["Resultat_Final"].mean().dropna()
-    dynamic_dict = grouped.to_dict()  # ex. {"UAP": 10.5, "Labor": 35.0}
+    dynamic_dict = grouped.to_dict()
 
-    # 3) Fusion
-    # On part d'un copy du dico statique, on met à jour avec les partis dynamiques
-    merged_dict = dict(static_dict)  # copie
+    merged_dict = dict(static_dict)
     for p, val in dynamic_dict.items():
         if p in merged_dict:
-            # On prend le max, ou la somme, ou la moyenne...
             merged_dict[p] = max(merged_dict[p], val)
         else:
             merged_dict[p] = val
 
-    # 4) Filtrer les doublons (similar_party)
     filtered = filter_duplicate_parties(merged_dict)
-
-    # 5) On trie et prend top 3
     sorted_items = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
-    top3 = sorted_items[:2]
+    top3 = sorted_items[:3]
 
     if not top3:
         st.info(f"No final results after filtering for {election_name}.")
         return
 
-    st.header(f"ELECTION WINNERS — {election_name}  ")
+    st.header(f"Top 3 – {election_name} (Merged)")
     st.divider()
 
     PARTY_IMAGES = {
@@ -198,11 +194,7 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         "TPP vote L/NP": "images/national.jpg",
         "2PP vote ALP": "images/messi.png",
         "2PP vote L/NP": "images/national.jpg",
-        "lippmann": "images/lippmann.jpg",
-        "TPP vote Labor": "images/labor.png",
-        "cr7": "images/cr7.jpg"
-
-
+        "TPP vote Labor": "images/labor.png"
     }
     fallback = "images/messi.png"
 
@@ -211,81 +203,97 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         desc = f"Score final moyen : {val:.1f}%"
         img = PARTY_IMAGES.get(party_name, fallback)
         with cols[i]:
-            st.image(img, use_container_width=True)
+            st.image(img, use_column_width=True)
             st.subheader(party_name)
             st.write(desc)
 
+# ------------------------------
+# 4) Main app
+# ------------------------------
 def main():
     st.set_page_config(page_title="Polling Analysis", layout="wide")
-    st.title(" ASME Election Polling Analysis")
+    st.title("ASME Election Polling Analysis")
 
-    uploaded_file = st.sidebar.file_uploader("Upload an Excel file (.xlsx)", type=["xlsx"])
-    if not uploaded_file:
-        st.info("Please upload an Excel file.")
+    # 4.1) Multi-file uploader
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload Excel files (.xlsx)",
+        type=["xlsx"],
+        accept_multiple_files=True
+    )
+
+    # Si aucun fichier => on arrête.
+    if not uploaded_files:
+        st.info("Please upload at least one Excel file.")
         return
 
-    sheet_choice = st.sidebar.text_input("Sheet name or index (optional)", value="")
-    try:
-        sheet_to_use = int(sheet_choice) if sheet_choice.strip() else 0
-    except ValueError:
-        sheet_to_use = sheet_choice
+    # 4.2) Liste de noms de fichiers
+    file_names = [f.name for f in uploaded_files]
+    chosen_file = st.sidebar.selectbox("Choose a file to analyze", file_names)
 
-    # 1) Lecture du DataFrame
-    if ("df_master" not in st.session_state) or (st.session_state.get("current_file_name") != uploaded_file.name):
-        df_load = load_data(uploaded_file, sheet_name=sheet_to_use)
-        df_load = remap_parties(df_load)  # Remap
-        st.session_state["df_master"] = df_load.copy()
-        st.session_state["current_file_name"] = uploaded_file.name
+    # 4.3) On stocke tous les DataFrames dans un cache local (session_state)
+    if "files_data" not in st.session_state:
+        st.session_state["files_data"] = {}
 
-    df_initial = st.session_state["df_master"]
+    # Si le fichier choisi n'est pas encore dans st.session_state, on le charge
+    if chosen_file not in st.session_state["files_data"]:
+        for f_obj in uploaded_files:
+            if f_obj.name == chosen_file:
+                df_load = load_data(f_obj, sheet_name=0)    # ou laissez l'utilisateur choisir le sheet_name
+                df_load = remap_parties(df_load)
+                df_load = fill_resultat_final_from_dict(df_load)
+                st.session_state["files_data"][chosen_file] = df_load
+                break
 
-    # 2) Assurer 'Resultat_Final'
-    if "Resultat_Final" not in df_initial.columns:
-        df_initial["Resultat_Final"] = np.nan
+    # 4.4) Récupération du DataFrame choisi
+    df_initial = st.session_state["files_data"][chosen_file]
 
-    # 3) Fill depuis le dico statique
-    df_initial = fill_resultat_final_from_dict(df_initial)
-
-    # 4) Ajout d'un parti (optionnel)
+    # 4.5) Ajout d'un nouveau parti/candidat
     st.sidebar.subheader("Add a new Political Party")
     new_party = st.sidebar.text_input("New party name")
     if st.sidebar.button("Add Party/Candidate"):
         if new_party.strip():
+            # On génère des lignes pour chaque (Date, Election_Year) existant
             df_dates = df_initial[["Date", "Election_Year"]].drop_duplicates().copy()
             random_scores = np.random.uniform(50, 60, size=len(df_dates))
             df_dates["Political_Party"] = new_party
             df_dates["Prediction_Result"] = random_scores
             final_value = np.random.uniform(50, 60)
             df_dates["Resultat_Final"] = final_value
-            st.session_state["df_master"] = pd.concat([df_initial, df_dates], ignore_index=True)
-            df_initial = st.session_state["df_master"]
 
-            # Mise à jour du dict
+            # On concatène dans le DataFrame
+            df_concat = pd.concat([df_initial, df_dates], ignore_index=True)
+
+            # Mise à jour st.session_state
+            st.session_state["files_data"][chosen_file] = df_concat
+            df_initial = df_concat
+
+            # Mise à jour du dict statique (optionnel)
             for y in df_dates["Election_Year"].dropna().unique():
                 if y not in AUSTRALIA_RESULTS:
                     AUSTRALIA_RESULTS[y] = {}
                 AUSTRALIA_RESULTS[y][new_party] = final_value
 
-            st.success(f"Party '{new_party}' added with a final score of ~{final_value:.2f}.")
-            st.rerun()
+            st.success(f"Party '{new_party}' added with a final score of ~{final_value:.2f} in file '{chosen_file}'.")
+            st.experimental_rerun()
         else:
             st.warning("Please provide a non-empty party name.")
 
-    # 5) Vérif colonnes
+    # 4.6) Vérifications colonnes
     required = ["Date", "Election_Year", "Political_Party", "Prediction_Result"]
     missing_cols = [r for r in required if r not in df_initial.columns]
     if missing_cols:
         st.error(f"Missing required columns: {missing_cols}")
         return
 
-    # 6) Filtrage
+    # 4.7) Filtrage sur l'année
     elections = df_initial["Election_Year"].dropna().unique()
-    selected_elec = st.sidebar.selectbox("Choose Election", sorted(elections))
+    selected_elec = st.sidebar.selectbox("Choose Election Year", sorted(elections))
     df_elec = df_initial[df_initial["Election_Year"] == selected_elec].copy()
     if df_elec.empty:
         st.warning("No data for this election year.")
         return
 
+    # Filtrage par partis
     all_parties = sorted(df_elec["Political_Party"].dropna().unique())
     chosen_parties = st.sidebar.multiselect("Select Parties", all_parties, default=all_parties)
     df_elec = df_elec[df_elec["Political_Party"].isin(chosen_parties)]
@@ -293,6 +301,7 @@ def main():
         st.warning("No data after party filter.")
         return
 
+    # Filtrage par date
     if df_elec["Date"].notna().any():
         min_d, max_d = df_elec["Date"].dropna().agg(["min", "max"])
         start_d, end_d = st.sidebar.date_input("Date Range", [min_d, max_d])
@@ -304,10 +313,10 @@ def main():
         st.warning("No data in that date range.")
         return
 
-    # 7) Stats + Graphs (Prediction_Result)
+    # 4.8) Stats + Graphs (basés sur 'Prediction_Result')
     df_elec["Prediction_Result"] = pd.to_numeric(df_elec["Prediction_Result"], errors="coerce")
 
-    st.subheader("Filtered Data (Prediction_Result & Resultat_Final)")
+    st.subheader(f"Filtered Data from '{chosen_file}' (Prediction_Result & Resultat_Final)")
     st.dataframe(df_elec, use_container_width=True)
 
     st.subheader("Summary Stats (on 'Prediction_Result')")
@@ -318,6 +327,7 @@ def main():
     col3.metric("Max", f"{stats['max']:.2f}" if not pd.isna(stats['max']) else "N/A")
     col4.metric("Min", f"{stats['min']:.2f}" if not pd.isna(stats['min']) else "N/A")
 
+    # Graphique mensuel
     df_elec = df_elec.set_index("Date").sort_index()
     df_monthly = df_elec.groupby(["Political_Party", pd.Grouper(freq="M")])["Prediction_Result"].mean().reset_index()
     pivoted = df_monthly.pivot(index="Date", columns="Political_Party", values="Prediction_Result")
@@ -326,24 +336,31 @@ def main():
     for p in chosen_parties:
         if p in pivoted.columns:
             fig.add_trace(go.Scatter(x=pivoted.index, y=pivoted[p], mode='lines+markers', name=p))
-    fig.update_layout(xaxis_title="Month", yaxis_title="Mean Prediction (%)",
-                      legend_title_text="Political Party", hovermode="x unified")
+    fig.update_layout(
+        xaxis_title="Month",
+        yaxis_title="Mean Prediction (%)",
+        legend_title_text="Political Party",
+        hovermode="x unified"
+    )
     st.plotly_chart(fig, use_container_width=True)
 
+    # Scatter plot daily
     st.subheader("Daily Scatter with Trendline (Prediction_Result)")
     df_scatter = df_elec.reset_index()
-    fig_scatter = px.scatter(df_scatter, x="Date", y="Prediction_Result",
-                             color="Political_Party", trendline="lowess",
-                             trendline_options=dict(frac=0.3),
-                             title="Scatter Plot with LOWESS Trend")
+    fig_scatter = px.scatter(
+        df_scatter, x="Date", y="Prediction_Result",
+        color="Political_Party", trendline="lowess",
+        trendline_options=dict(frac=0.3),
+        title="Scatter Plot with LOWESS Trend"
+    )
     fig_scatter.update_layout(hovermode="x unified")
     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # 8) Top 3 (fusionné) -> dictionnaire + user data
-    show_top3_from_merged(df_initial, selected_elec)
+    # 4.9) Top 3 (fusionné) => dictionnaire + user data
+    show_top3_from_merged(st.session_state["files_data"][chosen_file], selected_elec)
 
     st.write("---")
-    st.write("Stats/Graphs on 'Prediction_Result', Top 3 merges static + user data in 'Resultat_Final'.")
+    st.write("Multi-file analysis done! Stats/Graphs on 'Prediction_Result', then a top 3 merging static + user data in 'Resultat_Final'.")
 
 
 if __name__ == "__main__":
