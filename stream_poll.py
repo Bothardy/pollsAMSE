@@ -154,12 +154,14 @@ def filter_duplicate_parties(top_dict: dict) -> dict:
 def show_top3_from_merged(df: pd.DataFrame, election_name: str):
     """
     Fusionne data statique (AUSTRALIA_RESULTS) + data user (Resultat_Final),
-    filtre duplications, affiche top 3.
+    filtre duplications, et affiche le Top 3.
+    Si aucun résultat n'est trouvé et que le nom de l'élection contient "argentine",
+    un message spécifique est affiché.
     """
-    # 1) Partie statique
+    # 1) Récupération de la partie statique
     static_dict = AUSTRALIA_RESULTS.get(election_name, {})
 
-    # 2) Moyenne des scores dans le DataFrame
+    # 2) Calcul de la moyenne des scores dans le DataFrame pour l'année sélectionnée
     data_elec = df[df["Election_Year"] == election_name].copy()
     if data_elec.empty:
         st.info(f"No data to display for {election_name}.")
@@ -176,14 +178,14 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         else:
             merged_dict[p] = val
 
-    # 4) Filtrage des doublons
+    # 4) Filtrage des doublons (fusion des noms similaires)
     filtered = filter_duplicate_parties(merged_dict)
 
-    # 5) Tri et Top 3
+    # 5) Tri par ordre décroissant et sélection du top 3
     sorted_items = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
     top3 = sorted_items[:3]
 
-    # Condition supplémentaire : si top3 est vide et si le nom d'année contient "argentine"
+    # Condition supplémentaire : si top3 est vide et si election_name contient "argentine"
     if not top3:
         if "argentine" in election_name.lower():
             st.info(f"No final results available for {election_name} (Argentine file).")
@@ -214,10 +216,9 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         desc = f"Score final moyen : {val:.1f}%"
         img = PARTY_IMAGES.get(party_name, fallback)
         with cols[i]:
-            st.image(img, use_column_width=True)
+            st.image(img, use_container_width=True)
             st.subheader(party_name)
             st.write(desc)
-
 
 # ------------------------------
 # 4) Main app
