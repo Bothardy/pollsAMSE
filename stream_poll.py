@@ -194,7 +194,10 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         "TPP vote L/NP": "images/national.jpg",
         "2PP vote ALP": "images/messi.png",
         "2PP vote L/NP": "images/national.jpg",
-        "TPP vote Labor": "images/labor.png"
+        "TPP vote Labor": "images/labor.png",
+        "lippmann": "images/lippmann.jpg",
+         "cr7": "images/lippmann.png"
+
     }
     fallback = "images/messi.png"
 
