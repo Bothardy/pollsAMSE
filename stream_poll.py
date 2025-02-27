@@ -274,7 +274,7 @@ def main():
                 AUSTRALIA_RESULTS[y][new_party] = final_value
 
             st.success(f"Party '{new_party}' added with a final score of ~{final_value:.2f} in file '{chosen_file}'.")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.warning("Please provide a non-empty party name.")
 
