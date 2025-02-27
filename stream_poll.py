@@ -211,7 +211,7 @@ def show_top3_from_merged(df: pd.DataFrame, election_name: str):
         desc = f"Score final moyen : {val:.1f}%"
         img = PARTY_IMAGES.get(party_name, fallback)
         with cols[i]:
-            st.image(img, use_column_width=True)
+            st.image(img, use_container_width=True)
             st.subheader(party_name)
             st.write(desc)
 
